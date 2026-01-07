@@ -17,7 +17,7 @@
 ## 1. 环境要求
 
 - Windows 10/11
-- Python 3.10+
+- Python 3.11
 - NVIDIA GPU（推荐：用于 ASR 加速；若 GPU 初始化/推理失败会自动降级 CPU）
 - ASR 依赖（本地运行）：`faster-whisper`（GPU 需 CUDA/cuDNN，缺失会自动走 CPU）
 - 本地翻译接口已就绪：
