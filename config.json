@@ -1,0 +1,37 @@
+{
+  "asr": {
+    "backend": "whisper",
+    "device": "cuda",
+    "cuda_bin_dir": "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.6\\bin",
+    "compute_type": "int8_float32",
+    "model_path": "faster-whisper-large-v3-turbo",
+    "cuda_suspicious_min_chars_per_s": 1
+  },
+  "vad": {
+    "aggressiveness": 2,
+    "silence_ms": 1000,
+    "min_segment_ms": 400
+  },
+  "ui": {
+    "auto_switch_after_input": "text_out",
+    "auto_switch_after_output": "off",
+    "simple_partial_asr": {
+      "enabled": true,
+      "interval_s": 0.8,
+      "min_dur_s": 3.0,
+      "min_step_s": 0.4,
+      "max_dur_s": 30.0
+    }
+  },
+  "language": {
+    "prob_threshold": 0.7
+  },
+  "translate": {
+    "api_url": "http://localhost:1234/v1/chat/completions"
+  },
+  "reply_mode": "dialog",
+  "tts": {
+    "enabled": true,
+    "backend": "auto"
+  }
+}

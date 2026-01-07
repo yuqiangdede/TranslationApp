@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Realtime Speech Translate (Web)</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="left">
+          <button id="btn_ui_mode" class="ghost">简单模式</button>
+        </div>
+        <div class="modes">
+          <button id="btn_mic_in" class="mode">音频输入</button>
+          <button id="btn_file_in" class="mode active">文件输入</button>
+          <button id="btn_mic_out" class="mode">音频输出</button>
+          <button id="btn_text_out" class="mode">文字输出</button>
+        </div>
+        <div class="right">
+          <button id="btn_clear" class="ghost">清空</button>
+          <button id="btn_lang_auto" class="ghost">语种Auto</button>
+          <label class="lock">
+            <select id="lock_select"></select>
+          </label>
+          <button id="btn_settings" class="ghost">设置</button>
+        </div>
+      </header>
+
+      <main class="main">
+        <div id="status" class="status">状态：未连接</div>
+        <div id="chat" class="chat"></div>
+      </main>
+
+      <footer class="bottom">
+        <div class="debug_controls">
+          <input id="text_input" type="text" placeholder="文字输出：输入中文后回车/发送" disabled />
+          <button id="btn_send" class="primary" disabled>发送</button>
+        </div>
+        <div class="simple_controls">
+          <button id="btn_hold_listen" class="hold primary">听</button>
+          <button id="btn_hold_speak" class="hold primary">说</button>
+        </div>
+        <input id="file_picker" type="file" accept=".wav,.mp3" hidden />
+      </footer>
+    </div>
+
+    <dialog id="dlg_settings" class="settings">
+      <div class="settings_head">
+        <div>设置（config.json）</div>
+        <button id="btn_close_settings" class="ghost">关闭</button>
+      </div>
+      <textarea id="config_text" spellcheck="false"></textarea>
+      <div class="settings_actions">
+        <button id="btn_reload_cfg" class="ghost">重新加载</button>
+        <button id="btn_save_cfg" class="primary">保存</button>
+      </div>
+    </dialog>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

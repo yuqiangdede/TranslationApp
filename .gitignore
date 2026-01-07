@@ -1,0 +1,7 @@
+.codex/
+.idea/
+.venv/
+__pycache__/
+faster-whisper-*/
+res/
+/faster-whisper-large-v3-turbo/
