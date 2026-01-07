@@ -2,11 +2,8 @@ requests>=2.31.0
 webrtcvad-wheels>=2.0.11
 numpy>=1.26.0
 pywin32
-# faster-whisper（离线 ASR，默认）
 faster-whisper>=1.0.3
 av>=12.0.0
-
-# Web UI
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 python-multipart>=0.0.9
