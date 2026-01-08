@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 
 from translation_app.translate.hymt import HyMtClient, HyMtConfig, LANG_CODE_TO_NAME
+from translation_app.translate.ollama_correct import AsrCorrector, AsrCorrectorConfig, AsrCorrectorError
 from translation_app.tts.engine import TtsConfig, TtsEngine
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,47 @@ def build_hymt(cfg: dict) -> HyMtClient:
     translate_cfg = cfg_get(cfg, "translate", {}) if isinstance(cfg_get(cfg, "translate", {}), dict) else {}
     api_url = str(cfg_get(translate_cfg, "api_url", "http://localhost:1234/v1/chat/completions")).strip()
     return HyMtClient(HyMtConfig(api_url=api_url))
+
+
+def build_asr_corrector(cfg: dict) -> AsrCorrector | None:
+    corr_cfg = cfg_get(cfg, "asr_correction", {}) if isinstance(cfg_get(cfg, "asr_correction", {}), dict) else {}
+    enabled = bool(cfg_get(corr_cfg, "enabled", True))
+    if not enabled:
+        return None
+    api_url = str(cfg_get(corr_cfg, "api_url", "http://localhost:11434/api/generate")).strip()
+    model = str(cfg_get(corr_cfg, "model", "gemma3:4b")).strip()
+    temperature = float(cfg_get(corr_cfg, "temperature", 0.2) or 0.2)
+    connect_timeout_s = float(cfg_get(corr_cfg, "connect_timeout_s", 3.0) or 3.0)
+    read_timeout_s = float(cfg_get(corr_cfg, "read_timeout_s", 60.0) or 60.0)
+    max_retries = int(cfg_get(corr_cfg, "max_retries", 1) or 1)
+    backoff_s = float(cfg_get(corr_cfg, "backoff_s", 0.4) or 0.4)
+    return AsrCorrector(
+        AsrCorrectorConfig(
+            api_url=api_url,
+            model=model,
+            temperature=temperature,
+            connect_timeout_s=connect_timeout_s,
+            read_timeout_s=read_timeout_s,
+            max_retries=max_retries,
+            backoff_s=backoff_s,
+        )
+    )
+
+
+def correct_asr_text(*, text_in: str, corrector: AsrCorrector | None) -> str | None:
+    text = str(text_in or "").strip()
+    if not text:
+        return None
+    if corrector is None:
+        return text
+    try:
+        corrected = corrector.correct(text)
+    except AsrCorrectorError as exc:
+        logger.warning("ASR 语义纠错失败，使用原文：%s", exc)
+        return text
+    if corrected is None:
+        return None
+    return corrected
 
 
 def build_tts(cfg: dict) -> TtsEngine:

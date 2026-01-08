@@ -96,6 +96,7 @@ python translation_app/web/server.py
 - `ui.simple_partial_asr`：简单模式录音时的“实时 ASR”刷新（可关闭/调参）
 - `language.prob_threshold`
 - `translate.api_url`
+- `asr_correction`：ASR 语义纠错（Ollama 本地模型，仅在“说/mic_out”时启用）
 - `reply_mode`：当前 Web UI 固定为对话式交互（输入中文后翻译到语种 L）
 - `tts.enabled`：是否启用 TTS
 
@@ -105,6 +106,28 @@ python translation_app/web/server.py
 - `min_dur_s`：累计录音达到该时长后才开始刷新（秒）
 - `min_step_s`：新增录音达到该时长后才触发下一次刷新（秒）
 - `max_dur_s`：超过该时长不再做实时刷新（仍会在松开后做一次最终识别）
+
+`asr_correction` 子项（可选）：
+- `enabled`：是否启用语义纠错
+- `api_url`：Ollama 本地接口（默认 `http://localhost:11434/api/generate`）
+- `model`：纠错模型（默认 `gemma3:4b`）
+- `temperature`：采样温度
+- `connect_timeout_s` / `read_timeout_s`：连接/读取超时
+- `max_retries` / `backoff_s`：重试次数与退避
+
+示例：
+```json
+"asr_correction": {
+  "enabled": true,
+  "api_url": "http://localhost:11434/api/generate",
+  "model": "gemma3:4b",
+  "temperature": 0.2,
+  "connect_timeout_s": 3.0,
+  "read_timeout_s": 60.0,
+  "max_retries": 1,
+  "backoff_s": 0.4
+}
+```
 
 ---
 

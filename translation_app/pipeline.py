@@ -11,7 +11,15 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from translation_app.audio.vad import AudioFrame, SpeechSegment, VadSegmenter
-from translation_app.shared import LOCKABLE_LANG_CODES, asr_segment, build_asr, process_text, translate_segment_text
+from translation_app.shared import (
+    LOCKABLE_LANG_CODES,
+    asr_segment,
+    build_asr,
+    build_asr_corrector,
+    correct_asr_text,
+    process_text,
+    translate_segment_text,
+)
 from translation_app.translate.hymt import HyMtClient, HyMtConfig, HyMtError
 from translation_app.tts.engine import TtsConfig, TtsEngine
 
@@ -266,6 +274,8 @@ class SegmentWorkerThread(threading.Thread):
         self._asr = asr
         self._hymt: HyMtClient | None = hymt
         self._tts: TtsEngine | None = tts
+        self._corrector = None
+        self._models_ready = False
 
         lang_cfg = cfg.get("language") if isinstance(cfg.get("language"), dict) else {}
         self._thr = float(lang_cfg.get("prob_threshold", 0.7) or 0.7)
@@ -280,11 +290,13 @@ class SegmentWorkerThread(threading.Thread):
             pass
 
     def _init_models(self) -> None:
-        if (self._asr is not None) and (self._hymt is not None) and (self._tts is not None):
+        if self._models_ready:
             return
         self._asr, _, _, _ = build_asr(self._cfg, project_root=self._project_root)
         self._hymt = HyMtClient(HyMtConfig(api_url=(self._cfg.get("translate") or {}).get("api_url", "http://localhost:1234/v1/chat/completions")))
         self._tts = TtsEngine(TtsConfig(backend=("disabled" if not self._tts_enabled else ((self._cfg.get("tts") or {}).get("backend", "auto")))))
+        self._corrector = build_asr_corrector(self._cfg)
+        self._models_ready = True
 
     def run(self) -> None:
         try:
@@ -320,24 +332,38 @@ class SegmentWorkerThread(threading.Thread):
                 )
                 if not asr_out:
                     continue
+                lang_in = str(asr_out.get("lang_in", "") or "").strip().lower()
+                text_in_raw = str(asr_out.get("text_in", "") or "").strip()
+                if text_in_raw == "[无有效内容]":
+                    continue
+                text_in = text_in_raw
+                include_raw = False
+                if mode in ("mic_in", "mic_out") and self._corrector is not None:
+                    include_raw = True
+                    if mode == "mic_out" and lang_in == "zh":
+                        text_in = correct_asr_text(text_in=text_in_raw, corrector=self._corrector)
+                        if not text_in:
+                            continue
+                asr_out["text_in"] = text_in
+
                 if asr_out.get("suggested_lock_code"):
                     self._put("lock_lang", {"code": asr_out["suggested_lock_code"]})
-                self._put(
-                    "asr",
-                    {
-                        "mode": mode,
-                        "seg_id": int(getattr(seg, "segment_id", 0) or 0),
-                        "seg_start_s": float(getattr(seg, "start_time", 0.0) or 0.0),
-                        "seg_end_s": float(getattr(seg, "end_time", 0.0) or 0.0),
-                        "lang_in": asr_out.get("lang_in", ""),
-                        "prob": float(asr_out.get("prob", 0.0) or 0.0),
-                        "text_in": asr_out.get("text_in", ""),
-                        "t_asr_ms": float(asr_out.get("t_asr_ms", 0.0) or 0.0),
-                    },
-                )
+                payload = {
+                    "mode": mode,
+                    "seg_id": int(getattr(seg, "segment_id", 0) or 0),
+                    "seg_start_s": float(getattr(seg, "start_time", 0.0) or 0.0),
+                    "seg_end_s": float(getattr(seg, "end_time", 0.0) or 0.0),
+                    "lang_in": asr_out.get("lang_in", ""),
+                    "prob": float(asr_out.get("prob", 0.0) or 0.0),
+                    "text_in": text_in,
+                    "t_asr_ms": float(asr_out.get("t_asr_ms", 0.0) or 0.0),
+                }
+                if include_raw:
+                    payload["text_in_raw"] = text_in_raw
+                self._put("asr", payload)
 
                 tr_out = translate_segment_text(
-                    text_in=str(asr_out.get("text_in", "") or ""),
+                    text_in=text_in,
                     lang_in=str(asr_out.get("lang_in", "") or ""),
                     hymt=self._hymt,  # type: ignore[arg-type]
                     direction=("to_zh" if mode in ("mic_in", "file_in") else "to_locked"),
@@ -527,6 +553,10 @@ class FileInputThread(threading.Thread):
                 )
                 if not asr_out:
                     continue
+                text_in = str(asr_out.get("text_in", "") or "").strip()
+                if text_in == "[无有效内容]":
+                    continue
+                asr_out["text_in"] = text_in
                 any_segment = True
                 if not locked_code and asr_out.get("suggested_lock_code") in LOCKABLE_LANG_CODES:
                     locked_code = str(asr_out["suggested_lock_code"]).strip().lower()
@@ -540,13 +570,13 @@ class FileInputThread(threading.Thread):
                         "seg_end_s": float(getattr(seg, "end_time", 0.0) or 0.0),
                         "lang_in": asr_out.get("lang_in", ""),
                         "prob": float(asr_out.get("prob", 0.0) or 0.0),
-                        "text_in": asr_out.get("text_in", ""),
+                        "text_in": text_in,
                         "t_asr_ms": float(asr_out.get("t_asr_ms", 0.0) or 0.0),
                     },
                 )
 
                 tr_out = translate_segment_text(
-                    text_in=str(asr_out.get("text_in", "") or ""),
+                    text_in=text_in,
                     lang_in=str(asr_out.get("lang_in", "") or ""),
                     hymt=self._hymt,  # type: ignore[arg-type]
                     direction="to_zh",

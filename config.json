@@ -29,6 +29,16 @@
   "translate": {
     "api_url": "http://localhost:1234/v1/chat/completions"
   },
+  "asr_correction": {
+    "enabled": false,
+    "api_url": "http://localhost:11434/api/generate",
+    "model": "gemma3:4b",
+    "temperature": 0.2,
+    "connect_timeout_s": 3.0,
+    "read_timeout_s": 60.0,
+    "max_retries": 1,
+    "backoff_s": 0.4
+  },
   "reply_mode": "dialog",
   "tts": {
     "enabled": true,

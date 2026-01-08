@@ -25,9 +25,11 @@ from translation_app.shared import (
     LOCK_LANG_CODE_TO_LABEL,
     LOCKABLE_LANG_CODES,
     asr_segment,
+    build_asr_corrector,
     STABLE_LANG_CODES,
     build_asr,
     build_hymt,
+    correct_asr_text,
     load_json,
     translate_segment_text,
     write_json,
@@ -109,6 +111,7 @@ class WebSession:
         self._cfg_path = cfg_path
         self._cfg = load_json(cfg_path)
         self._shared_asr = get_global_asr(cfg=self._cfg, project_root=self._project_root)
+        self._asr_corrector = build_asr_corrector(self._cfg)
 
         self._mode: UiMode = "file_in"
         self._lang_lock_code: str | None = None
@@ -162,6 +165,7 @@ class WebSession:
     def reload_cfg(self) -> None:
         self._cfg = load_json(self._cfg_path)
         self._shared_asr = get_global_asr(cfg=self._cfg, project_root=self._project_root)
+        self._asr_corrector = build_asr_corrector(self._cfg)
         self._restart_text_worker()
         self._reload_ui_cfg()
         if self._mode in ("mic_in", "mic_out"):
@@ -173,6 +177,7 @@ class WebSession:
         write_json(self._cfg_path, data)
         self._cfg = data
         self._shared_asr = get_global_asr(cfg=self._cfg, project_root=self._project_root)
+        self._asr_corrector = build_asr_corrector(self._cfg)
         self._restart_text_worker()
         self._reload_ui_cfg()
         if self._mode in ("mic_in", "mic_out"):
@@ -522,24 +527,38 @@ class WebSession:
             if asr_out.get("suggested_lock_code"):
                 self._emit("lock_lang", {"code": asr_out["suggested_lock_code"]})
 
+            lang_in = str(asr_out.get("lang_in", "") or "").strip().lower()
+            text_in_raw = str(asr_out.get("text_in", "") or "").strip()
+            if text_in_raw == "[无有效内容]":
+                return
+            text_in = text_in_raw
+            include_raw = False
+            if mode in ("mic_in", "mic_out") and self._asr_corrector is not None:
+                include_raw = True
+                if mode == "mic_out" and lang_in == "zh":
+                    text_in = correct_asr_text(text_in=text_in_raw, corrector=self._asr_corrector)
+                    if not text_in:
+                        return
+            asr_out["text_in"] = text_in
+
             dur_s = float(len(pcm16_bytes)) / (2.0 * 16000.0) if pcm16_bytes else 0.0
-            self._emit(
-                "asr",
-                {
-                    "mode": mode,
-                    "simple_id": simple_id,
-                    "seg_id": 1,
-                    "seg_start_s": 0.0,
-                    "seg_end_s": dur_s,
-                    "lang_in": asr_out.get("lang_in", ""),
-                    "prob": float(asr_out.get("prob", 0.0) or 0.0),
-                    "text_in": asr_out.get("text_in", ""),
-                    "t_asr_ms": float(asr_out.get("t_asr_ms", 0.0) or 0.0),
-                },
-            )
+            payload = {
+                "mode": mode,
+                "simple_id": simple_id,
+                "seg_id": 1,
+                "seg_start_s": 0.0,
+                "seg_end_s": dur_s,
+                "lang_in": asr_out.get("lang_in", ""),
+                "prob": float(asr_out.get("prob", 0.0) or 0.0),
+                "text_in": text_in,
+                "t_asr_ms": float(asr_out.get("t_asr_ms", 0.0) or 0.0),
+            }
+            if include_raw:
+                payload["text_in_raw"] = text_in_raw
+            self._emit("asr", payload)
 
             tr_out = translate_segment_text(
-                text_in=str(asr_out.get("text_in", "") or ""),
+                text_in=text_in,
                 lang_in=str(asr_out.get("lang_in", "") or ""),
                 hymt=hymt,
                 direction=("to_zh" if mode == "mic_in" else "to_locked"),

@@ -204,6 +204,7 @@ function finalizeAsrFromPartial(payload) {
   const langIn = payload.lang_in || "";
   const prob = typeof payload.prob === "number" ? payload.prob.toFixed(2) : "";
   const textIn = payload.text_in || "";
+  const textInRaw = payload.text_in_raw || "";
   const tAsr = payload.t_asr_ms || 0;
 
   if (!(mode === "mic_in" || mode === "mic_out")) return false;
@@ -212,9 +213,15 @@ function finalizeAsrFromPartial(payload) {
   const st = asrPartialState[mode];
   if (!st || st.simple_id !== simpleId || !st.in) return false;
 
-  const line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
-  const line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
-  st.in.bubble.textContent = line1s;
+  let line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
+  let line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+  let line2 = "";
+  if (textInRaw) {
+    line1 = `[${ts}] IN 原文 (${langIn} ${prob}): ${textInRaw}`;
+    line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+    line2 = `[${ts}] IN 纠错: ${textIn}`;
+  }
+  st.in.bubble.textContent = line2 ? `${line1s}\n${line2}` : line1s;
   st.in.play.dataset.tts = textIn || "";
   st.in.play.disabled = !st.in.play.dataset.tts;
 
@@ -233,36 +240,51 @@ function renderAsr(payload) {
   const langIn = payload.lang_in || "";
   const prob = typeof payload.prob === "number" ? payload.prob.toFixed(2) : "";
   const textIn = payload.text_in || "";
+  const textInRaw = payload.text_in_raw || "";
   const tAsr = payload.t_asr_ms || 0;
 
   if (mode === "mic_in") {
-    const line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
-    const line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+    let line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
+    let line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+    let lineFix = "";
+    if (textInRaw) {
+      line1 = `[${ts}] IN 原文 (${langIn} ${prob}): ${textInRaw}`;
+      line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+      lineFix = `[${ts}] IN 纠错: ${textIn}`;
+    }
+    const lineIn = lineFix ? `${line1s}\n${lineFix}` : line1s;
     const st = audioMergeState.mic_in;
     if (st && segStart - st.lastEnd <= AUDIO_MERGE_GAP_S) {
-      st.in.bubble.textContent = `${st.in.bubble.textContent}\n${line1s}`.trim();
+      st.in.bubble.textContent = `${st.in.bubble.textContent}\n${lineIn}`.trim();
       st.in.play.dataset.tts = `${(st.in.play.dataset.tts || "").trim()} ${textIn}`.trim();
       st.in.play.disabled = !st.in.play.dataset.tts;
       st.lastEnd = segEnd || st.lastEnd;
       return;
     }
-    const b1 = addBubble({ side: "left", text: line1s, ttsText: textIn });
+    const b1 = addBubble({ side: "left", text: lineIn, ttsText: textIn });
     audioMergeState.mic_in = { lastEnd: segEnd || 0, in: b1, out: null };
     return;
   }
 
   if (mode === "mic_out") {
-    const line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
-    const line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+    let line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
+    let line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+    let line2 = "";
+    if (textInRaw) {
+      line1 = `[${ts}] IN 原文 (${langIn} ${prob}): ${textInRaw}`;
+      line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+      line2 = `[${ts}] IN 纠错: ${textIn}`;
+    }
+    const lineIn = line2 ? `${line1s}\n${line2}` : line1s;
     const st = audioMergeState.mic_out;
     if (st && segStart - st.lastEnd <= AUDIO_MERGE_GAP_S) {
-      st.in.bubble.textContent = `${st.in.bubble.textContent}\n${line1s}`.trim();
+      st.in.bubble.textContent = `${st.in.bubble.textContent}\n${lineIn}`.trim();
       st.in.play.dataset.tts = `${(st.in.play.dataset.tts || "").trim()} ${textIn}`.trim();
       st.in.play.disabled = !st.in.play.dataset.tts;
       st.lastEnd = segEnd || st.lastEnd;
       return;
     }
-    const b1 = addBubble({ side: "right", text: line1s, ttsText: textIn });
+    const b1 = addBubble({ side: "right", text: lineIn, ttsText: textIn });
     audioMergeState.mic_out = { lastEnd: segEnd || 0, in: b1, out: null };
     return;
   }
@@ -339,18 +361,26 @@ function renderSegment(payload) {
   const langIn = payload.lang_in || "";
   const prob = typeof payload.prob === "number" ? payload.prob.toFixed(2) : "";
   const textIn = payload.text_in || "";
+  const textInRaw = payload.text_in_raw || "";
   const dstCode = payload.dst_code || "";
   const textOut = payload.text_out || "";
   const tAsr = payload.t_asr_ms || 0;
   const tTr = payload.t_tr_ms || 0;
 
   if (mode === "mic_in") {
-    const line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
-    const line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+    let line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
+    let line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+    let lineFix = "";
+    if (textInRaw) {
+      line1 = `[${ts}] IN 原文 (${langIn} ${prob}): ${textInRaw}`;
+      line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+      lineFix = `[${ts}] IN 纠错: ${textIn}`;
+    }
+    const lineIn = lineFix ? `${line1s}\n${lineFix}` : line1s;
     const line2 = `[${ts}] ZH: ${textOut}（翻译 ${tTr.toFixed(0)}ms）`;
     const st = audioMergeState.mic_in;
     if (st && segStart - st.lastEnd <= AUDIO_MERGE_GAP_S) {
-      st.in.bubble.textContent = `${st.in.bubble.textContent}\n${line1s}`.trim();
+      st.in.bubble.textContent = `${st.in.bubble.textContent}\n${lineIn}`.trim();
       st.in.play.dataset.tts = `${(st.in.play.dataset.tts || "").trim()} ${textIn}`.trim();
       st.in.play.disabled = !st.in.play.dataset.tts;
 
@@ -360,7 +390,7 @@ function renderSegment(payload) {
       st.lastEnd = segEnd || st.lastEnd;
       return;
     }
-    const b1 = addBubble({ side: "left", text: line1s, ttsText: textIn });
+    const b1 = addBubble({ side: "left", text: lineIn, ttsText: textIn });
     const b2 = addBubble({ side: "left", text: line2, ttsText: textOut });
     audioMergeState.mic_in = { lastEnd: segEnd || 0, in: b1, out: b2 };
     return;
@@ -368,12 +398,19 @@ function renderSegment(payload) {
 
   if (mode === "mic_out") {
     const dstLabel = dstCode ? dstCode : "L";
-    const line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
-    const line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+    let line1 = `[${ts}] IN (${langIn} ${prob}): ${textIn}`;
+    let line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+    let lineFix = "";
+    if (textInRaw) {
+      line1 = `[${ts}] IN 原文 (${langIn} ${prob}): ${textInRaw}`;
+      line1s = tAsr ? `${line1}（识别 ${tAsr.toFixed(0)}ms）` : line1;
+      lineFix = `[${ts}] IN 纠错: ${textIn}`;
+    }
+    const lineIn = lineFix ? `${line1s}\n${lineFix}` : line1s;
     const line2 = `[${ts}] OUT (${dstLabel}): ${textOut}（翻译 ${tTr.toFixed(0)}ms）`;
     const st = audioMergeState.mic_out;
     if (st && segStart - st.lastEnd <= AUDIO_MERGE_GAP_S) {
-      st.in.bubble.textContent = `${st.in.bubble.textContent}\n${line1s}`.trim();
+      st.in.bubble.textContent = `${st.in.bubble.textContent}\n${lineIn}`.trim();
       st.in.play.dataset.tts = `${(st.in.play.dataset.tts || "").trim()} ${textIn}`.trim();
       st.in.play.disabled = !st.in.play.dataset.tts;
 
@@ -383,7 +420,7 @@ function renderSegment(payload) {
       st.lastEnd = segEnd || st.lastEnd;
       return;
     }
-    const b1 = addBubble({ side: "right", text: line1s, ttsText: textIn });
+    const b1 = addBubble({ side: "right", text: lineIn, ttsText: textIn });
     const b2 = addBubble({ side: "right", text: line2, ttsText: textOut });
     audioMergeState.mic_out = { lastEnd: segEnd || 0, in: b1, out: b2 };
     return;
