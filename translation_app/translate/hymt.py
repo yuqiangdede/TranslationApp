@@ -19,6 +19,15 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+_LOG_TEXT_LIMIT = 2000
+
+
+def _clip_log_text(text: str, *, limit: int = _LOG_TEXT_LIMIT) -> str:
+    s = str(text or "")
+    if len(s) <= limit:
+        return s
+    return f"{s[:limit]}...<truncated {len(s) - limit} chars>"
+
 
 LANG_CODE_TO_NAME: dict[str, str] = {
     # faster-whisper/Whisper 常见语言码 -> 目标语言名（按用户要求）
@@ -136,6 +145,17 @@ class HyMtClient:
             "stream": self._cfg.stream,
         }
 
+        logger.info(
+            "LM Studio request: url=%s model=%s temperature=%s max_tokens=%s stream=%s",
+            self._cfg.api_url,
+            self._cfg.model,
+            self._cfg.temperature,
+            self._cfg.max_tokens,
+            self._cfg.stream,
+        )
+        logger.info("LM Studio prompt(system): %s", _clip_log_text(system_prompt))
+        logger.info("LM Studio prompt(user): %s", _clip_log_text(user_prompt))
+
         headers = {"Content-Type": "application/json"}
         api_key = self._cfg.api_key or os.getenv("HYMT_API_KEY") or os.getenv("OPENAI_API_KEY")
         if api_key:
@@ -163,7 +183,9 @@ class HyMtClient:
                 )
                 if content is None:
                     content = ""
-                return str(content).strip()
+                content = str(content).strip()
+                logger.info("LM Studio response: %s", _clip_log_text(content))
+                return content
             except (requests.Timeout, requests.ConnectionError, requests.RequestException) as exc:
                 last_error = exc
                 if attempt >= self._cfg.max_retries:
