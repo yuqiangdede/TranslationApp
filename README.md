@@ -109,8 +109,9 @@ python translation_app/web/server.py
 
 `asr_correction` 子项（可选）：
 - `enabled`：是否启用语义纠错
-- `api_url`：Ollama 本地接口（默认 `http://localhost:11434/api/generate`）
+- `api_url`：OpenAI 兼容接口（默认 `http://localhost:11434/v1/chat/completions`）
 - `model`：纠错模型（默认 `gemma3:4b`）
+- `api_key`：OpenAI 兼容接口的 Bearer Token（可选）
 - `temperature`：采样温度
 - `connect_timeout_s` / `read_timeout_s`：连接/读取超时
 - `max_retries` / `backoff_s`：重试次数与退避
@@ -119,8 +120,9 @@ python translation_app/web/server.py
 ```json
 "asr_correction": {
   "enabled": true,
-  "api_url": "http://localhost:11434/api/generate",
+  "api_url": "http://localhost:11434/v1/chat/completions",
   "model": "gemma3:4b",
+  "api_key": "",
   "temperature": 0.2,
   "connect_timeout_s": 3.0,
   "read_timeout_s": 60.0,

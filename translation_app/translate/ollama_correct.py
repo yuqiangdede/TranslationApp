@@ -1,8 +1,8 @@
 """
-Ollama 本地语义纠错（用于 ASR 转写的纠错）。
+本地语义纠错（用于 ASR 转写的纠错），使用 OpenAI 兼容接口。
 
 硬性约束：
-- 只允许访问本地 Ollama 接口（默认 http://localhost:11434/api/generate）。
+- 只允许访问本地 OpenAI 兼容接口（默认 http://localhost:11434/v1/chat/completions）。
 - 必须带超时与重试，错误信息可读，便于 CLI 稳定运行。
 """
 
@@ -51,13 +51,14 @@ _CORRECT_PROMPT = (
 
 @dataclass(frozen=True)
 class AsrCorrectorConfig:
-    api_url: str = "http://localhost:11434/api/generate"
+    api_url: str = "http://localhost:11434/v1/chat/completions"
     model: str = "gemma3:4b"
     temperature: float = 0.2
     connect_timeout_s: float = 3.0
     read_timeout_s: float = 60.0
     max_retries: int = 1
     backoff_s: float = 0.4
+    api_key: str | None = None
 
 
 class AsrCorrectorError(RuntimeError):
@@ -84,22 +85,29 @@ class AsrCorrector:
         if text == "[无有效内容]":
             return None
 
+        system_prompt = _CORRECT_PROMPT
+        user_prompt = f"{text}"
         payload: dict[str, Any] = {
             "model": self._cfg.model,
-            "prompt": self._build_prompt(text),
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": self._cfg.temperature,
             "stream": False,
-            "options": {
-                "temperature": self._cfg.temperature,
-            },
         }
+        headers = {"Content-Type": "application/json"}
+        if self._cfg.api_key:
+            headers["Authorization"] = f"Bearer {self._cfg.api_key}"
         logger.info(
-            "Ollama request: url=%s model=%s temperature=%s stream=%s",
+            "ASR correction request: url=%s model=%s temperature=%s stream=%s",
             self._cfg.api_url,
             self._cfg.model,
             self._cfg.temperature,
             False,
         )
-        logger.info("Ollama prompt: %s", _clip_log_text(payload.get("prompt", "")))
+        logger.info("ASR correction prompt(system): %s", _clip_log_text(system_prompt))
+        logger.info("ASR correction prompt(user): %s", _clip_log_text(user_prompt))
 
         last_error: Exception | None = None
         for attempt in range(self._cfg.max_retries + 1):
@@ -107,6 +115,7 @@ class AsrCorrector:
                 with self._lock:
                     resp = self._session.post(
                         self._cfg.api_url,
+                        headers=headers,
                         json=payload,
                         timeout=(self._cfg.connect_timeout_s, self._cfg.read_timeout_s),
                     )
@@ -115,13 +124,17 @@ class AsrCorrector:
                         f"Ollama HTTP {resp.status_code}: {resp.text[:500]}"
                     )
                 data = resp.json()
-                content = data.get("response", "")
+                content = (
+                    data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content", "")
+                )
                 if content is None:
                     content = ""
                 content = str(content).strip()
                 if not content:
-                    raise AsrCorrectorError("Ollama 返回空结果。")
-                logger.info("Ollama response: %s", _clip_log_text(content))
+                    raise AsrCorrectorError("纠错模型返回空结果。")
+                logger.info("ASR correction response: %s", _clip_log_text(content))
                 if content == "[无有效内容]":
                     return None
                 return content
@@ -138,11 +151,11 @@ class AsrCorrector:
                 )
                 time.sleep(sleep_s)
             except ValueError as exc:
-                raise AsrCorrectorError(f"Ollama 返回非 JSON：{exc}") from exc
+                raise AsrCorrectorError(f"纠错模型返回非 JSON：{exc}") from exc
             except AsrCorrectorError:
                 raise
             except Exception as exc:  # noqa: BLE001 - 需要可读兜底
-                raise AsrCorrectorError(f"Ollama 调用异常：{exc}") from exc
+                raise AsrCorrectorError(f"纠错模型调用异常：{exc}") from exc
 
         raise AsrCorrectorError(
             f"ASR 语义纠错请求失败（已重试 {self._cfg.max_retries} 次）：{last_error}"

@@ -116,13 +116,14 @@ def build_asr_corrector(cfg: dict) -> AsrCorrector | None:
     enabled = bool(cfg_get(corr_cfg, "enabled", True))
     if not enabled:
         return None
-    api_url = str(cfg_get(corr_cfg, "api_url", "http://localhost:11434/api/generate")).strip()
+    api_url = str(cfg_get(corr_cfg, "api_url", "http://localhost:11434/v1/chat/completions")).strip()
     model = str(cfg_get(corr_cfg, "model", "gemma3:4b")).strip()
     temperature = float(cfg_get(corr_cfg, "temperature", 0.2) or 0.2)
     connect_timeout_s = float(cfg_get(corr_cfg, "connect_timeout_s", 3.0) or 3.0)
     read_timeout_s = float(cfg_get(corr_cfg, "read_timeout_s", 60.0) or 60.0)
     max_retries = int(cfg_get(corr_cfg, "max_retries", 1) or 1)
     backoff_s = float(cfg_get(corr_cfg, "backoff_s", 0.4) or 0.4)
+    api_key = str(cfg_get(corr_cfg, "api_key", "") or "").strip() or None
     return AsrCorrector(
         AsrCorrectorConfig(
             api_url=api_url,
@@ -132,6 +133,7 @@ def build_asr_corrector(cfg: dict) -> AsrCorrector | None:
             read_timeout_s=read_timeout_s,
             max_retries=max_retries,
             backoff_s=backoff_s,
+            api_key=api_key,
         )
     )
 

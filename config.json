@@ -30,9 +30,10 @@
     "api_url": "http://localhost:1234/v1/chat/completions"
   },
   "asr_correction": {
-    "enabled": false,
-    "api_url": "http://localhost:11434/api/generate",
-    "model": "gemma3:4b",
+    "enabled": true,
+    "api_url": "https://api.qnaigc.com/v1/chat/completions",
+    "model": "gpt-oss-120b",
+    "api_key": "sk-",
     "temperature": 0.2,
     "connect_timeout_s": 3.0,
     "read_timeout_s": 60.0,
